@@ -1,160 +1,159 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/4.9.1/firebase.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/4.6.0/firebase-firestore.js"></script>
-    <script>
+    <meta charset="UTF-8">
 
-        // Initialize Firebase
-        var config = {
-            apiKey: "AIzaSyDh-mw_xtDY7I5qAAKlSIKh5Ff5cx6xA_E",
-            authDomain: "code-diff.firebaseapp.com",
-            databaseURL: "https://code-diff.firebaseio.com",
-            projectId: "code-diff",
-            storageBucket: "",
-            messagingSenderId: "768568314264"
-        };
-        firebase.initializeApp(config);
-    </script>
+    <script src="config.js"></script>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/3.3.0/firebase.js"></script>
+
+    <!-- CodeMirror -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.17.0/codemirror.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.17.0/codemirror.css"/>
+
+    <!-- Firepad -->
+    <link rel="stylesheet" href="https://cdn.firebase.com/libs/firepad/1.4.0/firepad.css"/>
+    <script src="https://cdn.firebase.com/libs/firepad/1.4.0/firepad.min.js"></script>
+
     <script src="monaco-editor/min/vs/loader.js"></script>
+
+    <title>DIFF</title>
+
     <style>
-        *{
-            box-sizing:border-box;
+
+
+        body{
+            width:100vw;
+            height:100vh;
+            padding:0;
+            margin:0;
         }
-        body {
-            padding: 0;
-            margin: 0;
-            height: 100vh;
-            /*display:grid;*/
-            /*grid-template-rows: 2rem 1fr;*/
+        #main{
+            width:100%;
+            height:100%;
+            display:grid;
+            grid-template-rows: minmax(100px, 2fr) 1fr;
         }
 
-        #editorWrap{
+        #main #editable{
             display:grid;
-            grid-template-rows: 2fr 1fr;
+            grid-template-columns: 1fr 1fr;
+            grid-auto-rows: minmax(100px, auto);
+        }
+
+        #main #editable>*{
             height:100%;
         }
 
-        #container{
-            display:grid;
-            grid-template-columns: 1fr 1fr;
+        #main #my {
+            border-right:1px solid #c1c1c1;
         }
 
-        #student{
-            border-right:1px solid #565658;
+        #main #diff {
+            border-top:1px solid #c1c1c1;
         }
 
-        #diff{
-            border-top:1px solid #565658;
-        }
-
-        #languages{
-            font-size:1rem;
-            position:absolute;
-            z-index: 10000;
-            right:0.5rem;
-            bottom:0.5rem;
-
+        .powered-by-firepad{
+            display:none;
         }
     </style>
 </head>
-<body>
-<!--<div id="ui">-->
-    <select name="" id="languages">
-
-    </select>
-<!--</div>-->
-<div id="editorWrap">
-    <div id="container">
-        <div id="student" class="editor"></div>
-        <div id="teacher" class="editor"></div>
+<body onload="init()">
+<div id="main">
+    <div id="editable">
+        <div id="my" class="codemirror"></div>
+        <div id="collaborate" class="codemirror"></div>
     </div>
     <div id="diff"></div>
 </div>
 <script>
-    var db = firebase.firestore();
-    var classes = db.collection("classes");
-</script>
-<script>
-    require.config({paths: {'vs': 'monaco-editor/min/vs'}});
+    var ID = function () {
+        // Math.random should be unique because of its seeding algorithm.
+        // Convert it to base 36 (numbers + letters), and grab the first 9 characters
+        // after the decimal.
+        return Math.random().toString(36).substr(2, 6).replace('l', 'L').replace('1', '2').replace('o', 'p').replace('O', 'P').replace('0', '9');
+    };
+    ID();
 
-    function updateFirestore() {
-        db.collection("classes").doc(window.location.hash).set({
-            code: teacherEditor.getValue(),
-            updated: firebase.firestore.FieldValue.serverTimestamp(),
-            language: ($('#languages').find('option:selected').text())
-        });
+    function myFit() {
+        document.querySelector('#my .CodeMirror').style.height = window.innerHeight * 2 / 3 + 'px';
     }
 
-    require(['vs/editor/editor.main'], function () {
-
-        var diffEditor = monaco.editor.createDiffEditor(document.getElementById("diff"),
-            {originalEditable: true, renderSideBySide: false}
-        );
-
-        studentModel = monaco.editor.createModel('', "text/html");
-        teacherModel = monaco.editor.createModel("", "text/html");
-
-        diffEditor.setModel({
-            original: studentModel,
-            modified: teacherModel
-        });
+    function init() {
 
 
-        studentEditor = monaco.editor.create(document.getElementById('student'), {
-            value: '',
-            language: 'javascript',
-            theme: 'vs-dark'
-        });
+        firebase.initializeApp(window.firebaseConfig);
 
-        studentEditor.onKeyUp(function(e){
-            /*studentModel.setValue(studentModel.getValue());
-            diffEditor.setModel({
-                original: studentModel,
-                modified: teacherModel
-            });*/
-            studentModel.setValue(studentEditor.getValue());
-        })
+        var uid;
+        if (window.location.hash) {
+            uid = window.location.hash.substr(1);
+        } else {
+            alert('diff.ga에 오신 것을 환영합니다. diff.ga는 코드를 공유하고, 차이점을 확인할 수 있는 간단한 서비스입니다. \n' +
+                '\n' +
+                '이 서비스의 주소를 공유하고 싶은 사람에게 전달하면 아래와 같이 3등분 된 화면을 볼 수 있습니다. \n' +
+                '\n' +
 
-        teacherEditor = monaco.editor.create(document.getElementById('teacher'), {
-            value: '',
-            language: 'javascript',
-            theme: 'vs-dark'
-        });
+                'A│B\n' +
+                '───\n' +
+                '    C \n' +
 
-        setInterval(function(){
-            if(window.prev !== teacherEditor.getValue()){
-                if(teacherEditor.isFocused()){
-                    console.log('update');
-                    updateFirestore();
-                }
-                teacherModel.setValue(teacherEditor.getValue());
-            }
-            prev = teacherEditor.getValue();
-        }, 1000);
-
-
-        classes.doc(window.location.hash).onSnapshot(function (doc) {
-            var newVal = doc && doc.data().code;
-            if(newVal !== teacherEditor.getValue()){
-                console.log('->',newVal, '->',teacherEditor.getValue());
-                teacherEditor.setValue(newVal);
-            }
-        });
-
-        var supportedLangs = monaco.languages.getLanguages();
-        for(var i=0; i<supportedLangs.length; i++){
-            $('#languages').append('<option value="'+supportedLangs[i].id+'">'+supportedLangs[i].id+'</option>')
+                '\n' +
+                'B : 모두에게 공유할 코드를 입력하는 곳입니다. 실시간으로 공유 & 편집 됩니다. \n' +
+                'A : 비교하려는 코드를 입력하는 곳입니다. \n' +
+                'C : A와 B의 차이점을 보여줍니다. \n' +
+                '\n' +
+                'B에 입력된 내용은 일정시간이 지나면 자동으로 삭제됩니다. \n' +
+                '코드를 저장하는 용도로 이 서비스를 이용하지 말아주세요. \n' +
+                '\n' +
+                'Happy coding!');
+            uid = ID();
         }
-        $('#languages').change(function(e){
-            var selected = ($(this).find('option:selected').text());
-            monaco.editor.setModelLanguage(studentEditor.getModel(), selected);
-            monaco.editor.setModelLanguage(teacherEditor.getModel(), selected);
-            updateFirestore();
-        })
-    });
+        window.location.hash = uid;
 
+        var firepadRef = firebase.database().ref(uid);
+        firepadRef.update({'updated': firebase.database.ServerValue.TIMESTAMP})
+
+        var collaborate = CodeMirror(document.getElementById('collaborate'), {lineWrapping: true, lineNumbers: true});
+        var my = CodeMirror(document.getElementById('my'), {lineWrapping: true, lineNumbers: true});
+
+        my.on('change', function (cm) {
+            myDiffModel.setValue(cm.getValue());
+        });
+
+        collaborate.on('change', function (cm) {
+            collaborateModel.setValue(cm.getValue());
+        });
+
+        var firepad = Firepad.fromCodeMirror(firepadRef, collaborate, {
+            richTextShortcuts: false,
+            richTextToolbar: false,
+            defaultText: ''
+        });
+
+        require.config({paths: {'vs': 'monaco-editor/min/vs'}});
+        require(['vs/editor/editor.main'], function () {
+
+
+            var diffEditor = monaco.editor.createDiffEditor(document.getElementById("diff"),
+                {originalEditable: true, renderSideBySide: false}
+            );
+
+            myDiffModel = monaco.editor.createModel('', "text/plain");
+            collaborateModel = monaco.editor.createModel("", "text/plain");
+
+            diffEditor.setModel({
+                original: myDiffModel,
+                modified: collaborateModel
+            });
+        });
+
+        window.addEventListener('resize', function(){
+            myFit();
+        })
+        myFit();
+
+    }
 </script>
 </body>
 </html>
